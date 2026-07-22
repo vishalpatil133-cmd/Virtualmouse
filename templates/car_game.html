@@ -1,0 +1,647 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Stark Virtual Steering Car Game</title>
+    <style>
+        :root {
+            --neon-blue: #00d2ff;
+            --neon-red: #ff2a00;
+            --neon-green: #39ff14;
+            --neon-purple: #b026ff;
+            --bg-dark: #030308;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        body {
+            background-color: var(--bg-dark);
+            color: #ffffff;
+            font-family: 'Segoe UI', -apple-system, sans-serif;
+            overflow: hidden;
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #game-container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            max-width: 480px;
+            max-height: 850px;
+            border: 2px solid rgba(0, 210, 255, 0.2);
+            box-shadow: 0 0 30px rgba(0, 210, 255, 0.1);
+            background: #000000;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            flex: 1;
+            background: #000000;
+        }
+
+        /* Sci-Fi Dashboard UI */
+        #hud-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            padding: 20px;
+            pointer-events: none;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            z-index: 10;
+        }
+
+        .hud-panel {
+            background: rgba(3, 3, 8, 0.7);
+            border: 1px solid rgba(0, 210, 255, 0.2);
+            border-radius: 8px;
+            padding: 10px 15px;
+            font-family: monospace;
+            backdrop-filter: blur(5px);
+        }
+
+        #panel-left {
+            color: var(--neon-blue);
+            text-shadow: 0 0 8px var(--neon-blue);
+        }
+
+        #panel-right {
+            color: var(--neon-green);
+            text-shadow: 0 0 8px var(--neon-green);
+            text-align: right;
+        }
+
+        .hud-label {
+            font-size: 0.7rem;
+            color: #64748b;
+            margin-bottom: 2px;
+            text-transform: uppercase;
+        }
+
+        .hud-value {
+            font-size: 1.1rem;
+            font-weight: bold;
+        }
+
+        /* Splash Screen / Game Over Screen */
+        .overlay-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(3, 3, 8, 0.95);
+            z-index: 20;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 40px;
+            text-align: center;
+        }
+
+        .overlay-screen h1 {
+            color: var(--neon-blue);
+            font-size: 2rem;
+            letter-spacing: 2px;
+            margin-bottom: 20px;
+            text-shadow: 0 0 15px rgba(0, 210, 255, 0.5);
+        }
+
+        .overlay-screen p {
+            color: #94a3b8;
+            font-size: 0.9rem;
+            line-height: 1.6;
+            margin-bottom: 30px;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #00d2ff 0%, #0066ff 100%);
+            border: none;
+            color: white;
+            padding: 14px 28px;
+            font-size: 0.95rem;
+            font-weight: bold;
+            border-radius: 8px;
+            cursor: pointer;
+            box-shadow: 0 0 15px rgba(0, 210, 255, 0.4);
+            transition: all 0.2s;
+        }
+
+        .btn:active {
+            transform: scale(0.96);
+        }
+
+        /* Floating steering instruction alert */
+        #steering-alert {
+            position: absolute;
+            bottom: 220px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(255, 42, 0, 0.15);
+            border: 1px solid rgba(255, 42, 0, 0.3);
+            color: var(--neon-red);
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-family: monospace;
+            font-size: 0.75rem;
+            z-index: 5;
+            pointer-events: none;
+            display: none;
+            text-shadow: 0 0 5px var(--neon-red);
+            animation: pulse 1s infinite alternate;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 0.6; }
+            100% { opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="game-container">
+        <!-- Sci-Fi HUD Panel -->
+        <div id="hud-container">
+            <div id="panel-left" class="hud-panel">
+                <div class="hud-label">Speed</div>
+                <div id="hud-speed" class="hud-value">0 KM/H</div>
+                <div class="hud-label" style="margin-top: 8px;">Steering</div>
+                <div id="hud-steer" class="hud-value">0.0°</div>
+            </div>
+            <div id="panel-right" class="hud-panel">
+                <div class="hud-label">Score</div>
+                <div id="hud-score" class="hud-value">00000</div>
+                <div class="hud-label" style="margin-top: 8px;">Health</div>
+                <div id="hud-health" class="hud-value" style="color: var(--neon-green);">100%</div>
+                <div class="hud-label" style="margin-top: 8px;">Hands Active</div>
+                <div id="hud-hands" class="hud-value" style="color: var(--neon-red);">0 / 2</div>
+            </div>
+        </div>
+
+        <!-- Steering Warning Alert -->
+        <div id="steering-alert">HANDS NOT DETECTED</div>
+
+        <!-- Start Screen -->
+        <div id="screen-start" class="overlay-screen">
+            <h1>NEON RACER</h1>
+            <p>Stark Virtual Steering Controller Simulator.<br><br>
+               Hold your hands up in the air as if holding a steering wheel.<br>
+               Tilt hands <b>Left/Right</b> to steer.<br>
+               Pinch <b>Right Hand</b> to Accelerate (Gas).<br>
+               Pinch <b>Left Hand</b> to Brake.</p>
+            <button id="btn-start" class="btn">START ENGINE</button>
+        </div>
+
+        <!-- Game Over Screen -->
+        <div id="screen-gameover" class="overlay-screen" style="display: none;">
+            <h1 style="color: var(--neon-red); text-shadow: 0 0 15px rgba(255, 42, 0, 0.5);">CRASH DETECTED</h1>
+            <p>System Overload. Driving Simulator halted.<br><br>Your Final Score: <span id="final-score" style="color: white; font-weight: bold; font-size: 1.2rem;">0</span></p>
+            <button id="btn-restart" class="btn">RESTART SIMULATOR</button>
+        </div>
+
+        <!-- Canvas -->
+        <canvas id="game-canvas"></canvas>
+    </div>
+
+    <script>
+        const WS_PORT = 8767;
+
+        // Game State variables
+        let isPlaying = false;
+        let speed = 0; // current speed
+        let maxSpeed = 160;
+        let score = 0;
+        let health = 100;
+        
+        // Gesture controller coordinates
+        let currentSteerAngle = 0;
+        let targetSteerAngle = 0;
+        let gasFlag = false;
+        let brakeFlag = false;
+        let latestHands = [];
+        let isHandDetected = false;
+
+        // Canvas context
+        const canvas = document.getElementById('game-canvas');
+        const ctx = canvas.getContext('2d');
+        const btnStart = document.getElementById('btn-start');
+        const btnRestart = document.getElementById('btn-restart');
+        const screenStart = document.getElementById('screen-start');
+        const screenGameover = document.getElementById('screen-gameover');
+        const steerAlert = document.getElementById('steering-alert');
+
+        // Layout variables
+        let width = canvas.width = 480;
+        let height = canvas.height = 800;
+
+        // Road lanes drawing variables
+        let roadOffset = 0;
+
+        // Player car state
+        const playerCar = {
+            x: width / 2,
+            y: height - 180,
+            w: 48,
+            h: 88,
+            color: '#00d2ff'
+        };
+
+        // Obstacles array
+        let obstacles = [];
+        const obstacleColors = ['#ff2a00', '#b026ff', '#e2e8f0', '#ffaa00'];
+
+        // =====================================================================
+        // WEBSOCKET CLIENT GESTURE HANDLING
+        // =====================================================================
+        let socket = null;
+
+        function connectWebSocket() {
+            const serverIp = window.location.hostname;
+            const wsUrl = `ws://${serverIp}:${WS_PORT}`;
+
+            socket = new WebSocket(wsUrl);
+
+            socket.onopen = () => {
+                console.log("[WS] Connected to Steering gesture server.");
+                steerAlert.style.display = 'none';
+            };
+
+            socket.onclose = () => {
+                console.log("[WS] Disconnected. Reconnecting...");
+                setTimeout(connectWebSocket, 3000);
+            };
+
+            socket.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                
+                isHandDetected = data.detected;
+                const handCount = (data.hands) ? data.hands.length : 0;
+                
+                const hudHands = document.getElementById('hud-hands');
+                if (handCount === 0) {
+                    hudHands.textContent = "0 / 2 (Raise Hands)";
+                    hudHands.style.color = 'var(--neon-red)';
+                } else if (handCount === 1) {
+                    hudHands.textContent = "1 / 2 (1-Hand Drive)";
+                    hudHands.style.color = '#ffaa00'; // Orange
+                } else {
+                    hudHands.textContent = "2 / 2 (Dual Steer)";
+                    hudHands.style.color = 'var(--neon-green)';
+                }
+
+                if (data.detected) {
+                    targetSteerAngle = data.steering;
+                    gasFlag = data.accelerate;
+                    brakeFlag = data.brake;
+                    latestHands = data.hands || [];
+                    steerAlert.style.display = 'none';
+                } else {
+                    targetSteerAngle = 0.0;
+                    gasFlag = false;
+                    brakeFlag = false;
+                    latestHands = [];
+                    // Alert user to raise hands if in game loop
+                    if (isPlaying) {
+                        steerAlert.style.display = 'block';
+                    }
+                }
+            };
+        }
+
+        // =====================================================================
+        // CAR GAME ENGINE & LOOP
+        // =====================================================================
+        
+        function resetGame() {
+            speed = 0;
+            score = 0;
+            health = 100;
+            playerCar.x = width / 2;
+            obstacles = [];
+            roadOffset = 0;
+            
+            document.getElementById('hud-speed').textContent = "0 KM/H";
+            document.getElementById('hud-score').textContent = "00000";
+            document.getElementById('hud-health').textContent = "100%";
+            document.getElementById('hud-health').style.color = 'var(--neon-green)';
+        }
+
+        function startGame() {
+            resetGame();
+            screenStart.style.display = 'none';
+            screenGameover.style.display = 'none';
+            isPlaying = true;
+        }
+
+        function gameOver() {
+            isPlaying = false;
+            screenGameover.style.display = 'flex';
+            document.getElementById('final-score').textContent = Math.floor(score);
+        }
+
+        function spawnObstacle() {
+            if (obstacles.length < 3) {
+                // Determine horizontal lane positions (3 lanes: left, middle, right)
+                const lanes = [width * 0.22, width * 0.5, width * 0.78];
+                const selectedLane = lanes[Math.floor(Math.random() * lanes.length)];
+                
+                // Prevent overlapping obstacle spawns
+                let isOverlap = false;
+                obstacles.forEach(obs => {
+                    if (obs.y < 120 && Math.abs(obs.x - selectedLane) < 10) {
+                        isOverlap = true;
+                    }
+                });
+
+                if (!isOverlap) {
+                    obstacles.push({
+                        x: selectedLane,
+                        y: -100,
+                        w: 44,
+                        h: 84,
+                        color: obstacleColors[Math.floor(Math.random() * obstacleColors.length)],
+                        speedOffset: 1 + Math.random() * 2 // speeds relative to environment
+                    });
+                }
+            }
+        }
+
+        // Check AABB collision detection
+        function checkCollision(car1, car2) {
+            return (
+                car1.x - car1.w/2 < car2.x + car2.w/2 &&
+                car1.x + car1.w/2 > car2.x - car2.w/2 &&
+                car1.y - car1.h/2 < car2.y + car2.h/2 &&
+                car1.y + car1.h/2 > car2.y - car2.h/2
+            );
+        }
+
+        function updatePhysics() {
+            if (!isPlaying) return;
+
+            // 1. Steering calculations: interpolate steering angle smoothly
+            currentSteerAngle += (targetSteerAngle - currentSteerAngle) / 5.0;
+            document.getElementById('hud-steer').textContent = `${currentSteerAngle.toFixed(1)}°`;
+
+            // Steering moves player horizontally (clamp to road boundaries)
+            const steerFactor = currentSteerAngle * 0.13 * (speed / 100 + 0.3);
+            playerCar.x += steerFactor;
+            playerCar.x = Math.max(width * 0.12, Math.min(width * 0.88, playerCar.x));
+
+            // 2. Speed / Acceleration controls (Auto-Cruise when hands are tracked)
+            if (isHandDetected) {
+                const minCruiseSpeed = 45;
+                if (gasFlag) {
+                    speed += 1.5; // Accelerate
+                } else if (brakeFlag) {
+                    speed = Math.max(20, speed - 3.0); // Brake down to 20
+                } else {
+                    // Drift towards cruise speed
+                    if (speed < minCruiseSpeed) {
+                        speed += 1.0;
+                    } else {
+                        speed -= 0.5;
+                    }
+                }
+            } else {
+                // Decelerate rapidly to 0 if no hands are tracked
+                speed = Math.max(0, speed - 2.5);
+            }
+            // Clamp speed bounds
+            speed = Math.max(0, Math.min(maxSpeed, speed));
+            document.getElementById('hud-speed').textContent = `${Math.floor(speed)} KM/H`;
+
+            // Score accumulates by distance relative to speed
+            if (speed > 5) {
+                score += speed * 0.005;
+                document.getElementById('hud-score').textContent = String(Math.floor(score)).padStart(5, '0');
+            }
+
+            // 3. Move road markers backwards based on speed
+            roadOffset += speed * 0.15;
+            if (roadOffset >= 80) roadOffset = 0;            
+        }
+
+        // =====================================================================
+        // CANVAS RENDERING GRAPHICS
+        // =====================================================================
+        function drawScene() {
+            // Clear screen
+            ctx.fillStyle = '#020205';
+            ctx.fillRect(0, 0, width, height);
+
+            // 1. Draw Neon Side Road Lanes (Boundaries)
+            ctx.strokeStyle = 'rgba(0, 210, 255, 0.15)';
+            ctx.lineWidth = 1;
+            // Draw horizontal grids for Cyberpunk perspective glow
+            for (let y = 0; y < height; y += 40) {
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(width, y);
+                ctx.stroke();
+            }
+
+            // Draw Road Surface
+            ctx.fillStyle = '#06060f';
+            ctx.fillRect(width * 0.1, 0, width * 0.8, height);
+
+            // Left and Right border lanes
+            ctx.strokeStyle = 'var(--neon-blue)';
+            ctx.lineWidth = 4;
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = 'var(--neon-blue)';
+            
+            ctx.beginPath();
+            ctx.moveTo(width * 0.1, 0);
+            ctx.lineTo(width * 0.1, height);
+            ctx.moveTo(width * 0.9, 0);
+            ctx.lineTo(width * 0.9, height);
+            ctx.stroke();
+
+            // Center dotted lane dividers (scrolling)
+            ctx.strokeStyle = 'rgba(0, 210, 255, 0.4)';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([30, 50]);
+            
+            // Draw Lane 1 divider
+            ctx.beginPath();
+            ctx.moveTo(width * 0.36, -80 + roadOffset);
+            ctx.lineTo(width * 0.36, height);
+            // Draw Lane 2 divider
+            ctx.moveTo(width * 0.63, -80 + roadOffset);
+            ctx.lineTo(width * 0.63, height);
+            ctx.stroke();
+            ctx.setLineDash([]); // reset line dash
+
+            // 2. Draw Player Cyber Car
+            ctx.save();
+            ctx.translate(playerCar.x, playerCar.y);
+            // Draw glowing tail lights
+            ctx.fillStyle = gasFlag ? 'var(--neon-green)' : 'var(--neon-red)';
+            ctx.shadowColor = gasFlag ? 'var(--neon-green)' : 'var(--neon-red)';
+            ctx.shadowBlur = 15;
+            ctx.fillRect(-playerCar.w/2 + 6, playerCar.h/2 - 4, 10, 6);
+            ctx.fillRect(playerCar.w/2 - 16, playerCar.h/2 - 4, 10, 6);
+
+            // Body
+            ctx.fillStyle = '#0a0d14';
+            ctx.strokeStyle = 'var(--neon-blue)';
+            ctx.lineWidth = 3;
+            ctx.shadowColor = 'var(--neon-blue)';
+            ctx.shadowBlur = 10;
+            
+            ctx.beginPath();
+            ctx.roundRect(-playerCar.w/2, -playerCar.h/2, playerCar.w, playerCar.h, 12);
+            ctx.fill();
+            ctx.stroke();
+            
+            // Neon decals on car body
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(-10, -20);
+            ctx.lineTo(0, -35);
+            ctx.lineTo(10, -20);
+            ctx.stroke();
+
+            ctx.restore();
+
+            // 3. (Obstacles drawing loop removed for free-roaming mode)
+
+            // 4. Draw Glowing Steering Wheel Dashboard
+            drawDashboardWheel();
+
+            // 5. Draw Hand Skeleton Overlays
+            drawHandOverlay();
+
+            // Reset shadows
+            ctx.shadowBlur = 0;
+        }
+
+        // Draws the virtual cyber steering wheel that rotates
+        function drawDashboardWheel() {
+            const wx = width / 2;
+            const wy = height - 70;
+            const radius = 45;
+
+            ctx.save();
+            ctx.translate(wx, wy);
+            ctx.rotate(currentSteerAngle * Math.PI / 180); // Rotate wheel match hands!
+
+            // Outter Ring
+            ctx.strokeStyle = isHandDetected ? 'var(--neon-blue)' : '#334155';
+            ctx.lineWidth = 6;
+            ctx.shadowColor = isHandDetected ? 'var(--neon-blue)' : '#334155';
+            ctx.shadowBlur = 12;
+            ctx.beginPath();
+            ctx.arc(0, 0, radius, 0, Math.PI * 2);
+            ctx.stroke();
+
+            // Center core
+            ctx.fillStyle = '#0f172a';
+            ctx.beginPath();
+            ctx.arc(0, 0, 10, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+
+            // Spokes (Steering wheel spokes)
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.moveTo(-radius, 0);
+            ctx.lineTo(radius, 0);
+            ctx.moveTo(0, 0);
+            ctx.lineTo(0, radius);
+            ctx.stroke();
+
+            ctx.restore();
+        }
+
+        // Draw neon wireframes of user hands
+        function drawHandOverlay() {
+            if (!latestHands || latestHands.length === 0) return;
+
+            latestHands.forEach(hand => {
+                const pts = hand.landmarks;
+                if (!pts) return;
+
+                // Map 0-1 coordinates to canvas dimensions
+                const pixelPts = pts.map(p => [p[0] * width, p[1] * height]);
+
+                // Glowing green points if gas, blue otherwise
+                const handColor = hand.grab ? 'rgba(57, 255, 20, 0.85)' : 'rgba(0, 210, 255, 0.85)';
+                const skeletonColor = hand.grab ? 'rgba(57, 255, 20, 0.4)' : 'rgba(0, 210, 255, 0.4)';
+
+                ctx.fillStyle = handColor;
+                ctx.strokeStyle = skeletonColor;
+                ctx.lineWidth = 3.5;
+                ctx.shadowBlur = 8;
+                ctx.shadowColor = handColor;
+
+                // 1. Joints
+                pixelPts.forEach(pt => {
+                    ctx.beginPath();
+                    ctx.arc(pt[0], pt[1], 4, 0, Math.PI * 2);
+                    ctx.fill();
+                });
+
+                ctx.shadowBlur = 0; // reset shadow for lines to keep 60 FPS
+
+                // 2. Bones
+                const connections = [
+                    [0, 1], [1, 2], [2, 3], [3, 4],
+                    [0, 5], [5, 6], [6, 7], [7, 8],
+                    [0, 9], [9, 10], [10, 11], [11, 12],
+                    [0, 13], [13, 14], [14, 15], [15, 16],
+                    [0, 17], [17, 18], [18, 19], [19, 20],
+                    [5, 9], [9, 13], [13, 17], [17, 0], [0, 5]
+                ];
+
+                ctx.beginPath();
+                connections.forEach(conn => {
+                    const p1 = pixelPts[conn[0]];
+                    const p2 = pixelPts[conn[1]];
+                    ctx.moveTo(p1[0], p1[1]);
+                    ctx.lineTo(p2[0], p2[1]);
+                });
+                ctx.stroke();
+            });
+        }
+
+        // =====================================================================
+        // CORE LOOP TICKER
+        // =====================================================================
+        function gameTick() {
+            updatePhysics();
+            drawScene();
+            requestAnimationFrame(gameTick);
+        }
+
+        // Event listeners
+        btnStart.addEventListener('click', startGame);
+        btnRestart.addEventListener('click', startGame);
+
+        // Run
+        connectWebSocket();
+        gameTick();
+
+    </script>
+</body>
+</html>

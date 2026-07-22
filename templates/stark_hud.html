@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>JARVIS Stark 3D Holographic HUD</title>
+    <style>
+        :root {
+            --neon-blue: #00d2ff;
+            --neon-glow: rgba(0, 210, 255, 0.4);
+            --bg-dark: #020205;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        body {
+            background-color: var(--bg-dark);
+            color: #ffffff;
+            font-family: 'Segoe UI', -apple-system, sans-serif;
+            overflow: hidden;
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* 3D WebGL Canvas (hidden when in 4-way Hologram mode) */
+        #webgl-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+
+        /* 2D Projection Canvas for 4-way Hologram and Hand Visualizer */
+        #canvas-2d {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 2;
+            pointer-events: none;
+            background: transparent;
+        }
+
+        /* Sci-Fi Overlay UI */
+        #ui-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 10;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 25px;
+        }
+
+        .interactive {
+            pointer-events: auto;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            border-bottom: 1px solid rgba(0, 210, 255, 0.15);
+            padding-bottom: 15px;
+            text-shadow: 0 0 10px var(--neon-glow);
+        }
+
+        header h1 {
+            font-size: 1.3rem;
+            letter-spacing: 2px;
+            color: var(--neon-blue);
+            font-weight: 700;
+        }
+
+        header #author {
+            font-size: 0.75rem;
+            color: #64748b;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-top: 3px;
+        }
+
+        #system-status {
+            text-align: right;
+            font-family: monospace;
+            font-size: 0.8rem;
+            color: var(--neon-blue);
+        }
+
+        /* Center crosshairs */
+        #crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 60px;
+            height: 60px;
+            border: 1px dashed rgba(0, 210, 255, 0.25);
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 5;
+        }
+
+        #crosshair::before, #crosshair::after {
+            content: '';
+            position: absolute;
+            background: rgba(0, 210, 255, 0.4);
+        }
+
+        #crosshair::before { top: 50%; left: -10px; width: 80px; height: 1px; }
+        #crosshair::after { top: -10px; left: 50%; width: 1px; height: 80px; }
+
+        /* Floating Panel Controls */
+        footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .hud-btn {
+            background: rgba(0, 210, 255, 0.05);
+            border: 1px solid rgba(0, 210, 255, 0.3);
+            color: var(--neon-blue);
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            letter-spacing: 1px;
+            cursor: pointer;
+            backdrop-filter: blur(5px);
+            box-shadow: 0 0 15px rgba(0, 210, 255, 0.05);
+            transition: all 0.2s;
+        }
+
+        .hud-btn:hover {
+            background: rgba(0, 210, 255, 0.15);
+            box-shadow: 0 0 20px rgba(0, 210, 255, 0.25);
+            text-shadow: 0 0 8px var(--neon-blue);
+        }
+
+        .hud-btn.active {
+            background: rgba(0, 210, 255, 0.3);
+            box-shadow: 0 0 25px rgba(0, 210, 255, 0.5);
+            color: #ffffff;
+        }
+
+        #sensor-debug {
+            background: rgba(2, 2, 5, 0.7);
+            border: 1px solid rgba(0, 210, 255, 0.15);
+            border-radius: 8px;
+            padding: 12px 20px;
+            font-family: monospace;
+            font-size: 0.8rem;
+            color: #64748b;
+        }
+
+        /* Alignment Circle for Hologram Pyramid (only shown in Hologram Mode) */
+        #hologram-center-guide {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 280px;
+            height: 280px;
+            border: 1px dashed rgba(0, 210, 255, 0.15);
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 8;
+            display: none;
+        }
+    </style>
+    <!-- Load Three.js Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+
+    <!-- Main WebGL 3D Canvas -->
+    <canvas id="webgl-canvas"></canvas>
+
+    <!-- 2D Mirroring Canvas for Hologram Projector -->
+    <canvas id="canvas-2d"></canvas>
+
+    <!-- Alignment Circle for placing the plastic pyramid -->
+    <div id="hologram-center-guide"></div>
+
+    <div id="crosshair"></div>
+
+    <!-- UI Overlay HUD -->
+    <div id="ui-overlay">
+        <header>
+            <div>
+                <h1>STARK INDUSTRIES HUD</h1>
+                <div id="author">Developed by Vishal P</div>
+            </div>
+            <div id="system-status">
+                CONNECTION: OFFLINE<br>
+                GESTURE: INACTIVE
+            </div>
+        </header>
+
+        <footer>
+            <button id="btn-mode" class="hud-btn interactive">PROJECTOR MODE: OFF</button>
+            <div id="sensor-debug">
+                HAND STATE: NOT DETECTED
+            </div>
+        </footer>
+    </div>
+
+    <script>
+        // Configuration
+        const WS_PORT = 8766;
+
+        // UI Modes
+        let hologramMode = false;
+        let latestHands = [];
+        let doublePinch = false;
+
+        // Motion smoothing states
+        let targetRotationX = 0.2;
+        let targetRotationY = 0.5;
+        let targetScale = 1.2;
+        let targetExplode = 0.0; // gap distance for exploded rings
+
+        let currentRotationX = 0.2;
+        let currentRotationY = 0.5;
+        let currentScale = 1.2;
+        let currentExplode = 0.0;
+
+        // DOM elements
+        const btnMode = document.getElementById('btn-mode');
+        const systemStatus = document.getElementById('system-status');
+        const sensorDebug = document.getElementById('sensor-debug');
+        const webglCanvas = document.getElementById('webgl-canvas');
+        const canvas2D = document.getElementById('canvas-2d');
+        const ctx2D = canvas2D.getContext('2d');
+        const centerGuide = document.getElementById('hologram-center-guide');
+
+        // =====================================================================
+        // THREE.JS 3D SCENE SETUP
+        // =====================================================================
+        let scene, camera, renderer;
+        let reactorGroup; // holds all the nested rings of the Arc Reactor
+
+        // Nested components
+        let outerRing, midRing, innerRing, centralCore;
+        let coilsGroup, hudRing;
+        let particleSystem;
+
+        function init3D() {
+            scene = new THREE.Scene();
+            scene.fog = new THREE.FogExp2(0x020205, 0.015);
+
+            camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+            camera.position.z = 12;
+
+            // Setup WebGL Renderer with a hidden canvas sized square for the projector views
+            renderer = new THREE.WebGLRenderer({ canvas: webglCanvas, antialias: true, alpha: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+            // Create Arc Reactor Parent Group
+            reactorGroup = new THREE.Group();
+            scene.add(reactorGroup);
+
+            // Create Glowing Holographic Materials
+            const glowMaterial = new THREE.MeshBasicMaterial({
+                color: 0x00d2ff,
+                wireframe: true,
+                transparent: true,
+                opacity: 0.7,
+                blending: THREE.AdditiveBlending
+            });
+
+            const coreMaterial = new THREE.MeshBasicMaterial({
+                color: 0xffffff,
+                wireframe: true,
+                transparent: true,
+                opacity: 0.9,
+                blending: THREE.AdditiveBlending
+            });
+
+            // 1. Outer Ring Torus
+            const outerGeo = new THREE.TorusGeometry(2.0, 0.15, 10, 60);
+            outerRing = new THREE.Mesh(outerGeo, glowMaterial);
+            reactorGroup.add(outerRing);
+
+            // 2. Middle Ring Torus
+            const midGeo = new THREE.TorusGeometry(1.5, 0.12, 8, 48);
+            midRing = new THREE.Mesh(midGeo, glowMaterial);
+            reactorGroup.add(midRing);
+
+            // 2b. Electromagnetic Copper Coils (10 coils wrapping the middle ring)
+            coilsGroup = new THREE.Group();
+            reactorGroup.add(coilsGroup);
+            const coilGeo = new THREE.CylinderGeometry(0.08, 0.08, 0.3, 8);
+            const coilMat = new THREE.MeshBasicMaterial({
+                color: 0xffa500, // Copper orange glow
+                wireframe: true,
+                transparent: true,
+                opacity: 0.8,
+                blending: THREE.AdditiveBlending
+            });
+            for (let i = 0; i < 10; i++) {
+                const angle = (i / 10) * Math.PI * 2;
+                const coil = new THREE.Mesh(coilGeo, coilMat);
+                coil.position.x = Math.cos(angle) * 1.5;
+                coil.position.y = Math.sin(angle) * 1.5;
+                coil.rotation.z = angle + Math.PI/2;
+                coilsGroup.add(coil);
+            }
+
+            // 3. Inner Ring Torus
+            const innerGeo = new THREE.TorusGeometry(1.0, 0.1, 6, 36);
+            innerRing = new THREE.Mesh(innerGeo, glowMaterial);
+            reactorGroup.add(innerRing);
+
+            // 3b. Outer Holographic Dashboard Sensor HUD Ring
+            const hudRingGeo = new THREE.RingGeometry(2.35, 2.37, 32);
+            hudRing = new THREE.Mesh(hudRingGeo, new THREE.MeshBasicMaterial({
+                color: 0x00d2ff,
+                side: THREE.DoubleSide,
+                transparent: true,
+                opacity: 0.25,
+                wireframe: true
+            }));
+            reactorGroup.add(hudRing);
+
+            // 4. Central Reactor Power Core Cylinder
+            const coreGeo = new THREE.CylinderGeometry(0.4, 0.4, 0.8, 12, 4, true);
+            centralCore = new THREE.Mesh(coreGeo, coreMaterial);
+            centralCore.rotation.x = Math.PI / 2; // Face forward
+            reactorGroup.add(centralCore);
+
+            // 5. Sci-Fi Concentric Floating Particles (2 separate orbits)
+            const particleCount = 200;
+            const particleGeometry = new THREE.BufferGeometry();
+            const positions = new Float32Array(particleCount * 3);
+
+            for (let i = 0; i < particleCount * 3; i += 3) {
+                const isOuter = Math.random() > 0.5;
+                const radius = isOuter ? (2.1 + Math.random() * 0.4) : (1.1 + Math.random() * 0.3);
+                const angle = Math.random() * Math.PI * 2;
+                positions[i] = Math.cos(angle) * radius;
+                positions[i + 1] = Math.sin(angle) * radius;
+                positions[i + 2] = (Math.random() - 0.5) * 1.2;
+            }
+
+            particleGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            
+            const pMat = new THREE.PointsMaterial({
+                color: 0x00d2ff,
+                size: 0.12,
+                transparent: true,
+                opacity: 0.8,
+                blending: THREE.AdditiveBlending
+            });
+
+            particleSystem = new THREE.Points(particleGeometry, pMat);
+            reactorGroup.add(particleSystem);
+
+            // Grid Floor (only visible in PC HUD view)
+            const gridHelper = new THREE.GridHelper(20, 20, 0x00d2ff, 0x0f172a);
+            gridHelper.position.y = -4;
+            gridHelper.material.opacity = 0.25;
+            gridHelper.material.transparent = true;
+            scene.add(gridHelper);
+
+            // Ambient Tech Lights
+            const light = new THREE.DirectionalLight(0x00d2ff, 0.5);
+            light.position.set(0, 0, 10);
+            scene.add(light);
+        }
+
+        // =====================================================================
+        // WEBSOCKET CLIENT GESTURE HANDLING
+        // =====================================================================
+        let socket = null;
+
+        function connectWebSocket() {
+            const serverIp = window.location.hostname;
+            const wsUrl = `ws://${serverIp}:${WS_PORT}`;
+            
+            systemStatus.innerHTML = `CONNECTION: CONNECTING...<br>GESTURE: INACTIVE`;
+            socket = new WebSocket(wsUrl);
+
+            socket.onopen = () => {
+                systemStatus.innerHTML = `CONNECTION: ACTIVE<br>GESTURE: INACTIVE`;
+                systemStatus.style.color = '#4ade80';
+            };
+
+            socket.onclose = () => {
+                systemStatus.innerHTML = `CONNECTION: OFFLINE<br>GESTURE: INACTIVE`;
+                systemStatus.style.color = '#f87171';
+                setTimeout(connectWebSocket, 3000); // Reconnect loop
+            };
+
+            socket.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                
+                if (data.detected && data.hands && data.hands.length > 0) {
+                    latestHands = data.hands;
+                    systemStatus.innerHTML = `CONNECTION: ACTIVE<br>GESTURE: DETECTED (${latestHands.length} HANDS)`;
+                    systemStatus.style.color = '#4ade80';
+                    
+                    if (latestHands.length === 1) {
+                        // 1. Single Hand Controls (Orbit & Explode)
+                        const hand = latestHands[0];
+                        targetRotationY = (hand.x - 0.5) * Math.PI * 1.5;
+                        targetRotationX = (hand.y - 0.5) * Math.PI * 1.5;
+                        targetScale = Math.max(0.5, Math.min(3.0, (hand.scale / 0.1) * 1.2));
+                        targetExplode = hand.grab ? 1.6 : 0.0;
+                        doublePinch = false;
+                        
+                        const state = hand.grab ? "PINCH (EXPLODING)" : "HOVER";
+                        sensorDebug.textContent = `STATE: ${state} | Z-SCALE: ${targetScale.toFixed(2)}`;
+                        sensorDebug.style.color = hand.grab ? '#4ade80' : '#64748b';
+                    } else if (latestHands.length >= 2) {
+                        // 2. Dual Hand Controls (Stretch to Zoom & Double Pinch Core Charge)
+                        const h0 = latestHands[0];
+                        const h1 = latestHands[1];
+                        
+                        // Center point controls the camera rotation
+                        const cx = (h0.x + h1.x) / 2;
+                        const cy = (h0.y + h1.y) / 2;
+                        targetRotationY = (cx - 0.5) * Math.PI * 1.5;
+                        targetRotationX = (cy - 0.5) * Math.PI * 1.5;
+                        
+                        // Stretch distance controls Zoom scale
+                        const dist = Math.hypot(h0.x - h1.x, h0.y - h1.y);
+                        targetScale = Math.max(0.6, Math.min(3.5, dist * 3.5));
+                        
+                        // Explode is triggered if either hand is grabbed
+                        targetExplode = (h0.grab || h1.grab) ? 1.6 : 0.0;
+                        
+                        // Double Pinch activates Core Overload Charge
+                        doublePinch = h0.grab && h1.grab;
+                        
+                        const state = doublePinch ? "CORE OVERCHARGE (PINCH ALL)" : "DUAL HAND STEER";
+                        sensorDebug.textContent = `STATE: ${state} | DISTANCE: ${dist.toFixed(2)}`;
+                        sensorDebug.style.color = doublePinch ? '#f87171' : '#c084fc';
+                    }
+                } else {
+                    latestHands = [];
+                    doublePinch = false;
+                    systemStatus.innerHTML = `CONNECTION: ACTIVE<br>GESTURE: INACTIVE`;
+                    systemStatus.style.color = '#38bdf8';
+                    sensorDebug.textContent = `STATE: NOT DETECTED`;
+                    sensorDebug.style.color = '#64748b';
+                    
+                    targetRotationX = 0.2;
+                    targetRotationY = 0.5;
+                    targetScale = 1.2;
+                    targetExplode = 0.0;
+                }
+            };
+        }
+
+        // =====================================================================
+        // ANIMATION & RENDER LOOP
+        // =====================================================================
+        function animate() {
+            requestAnimationFrame(animate);
+
+            // 1. Core charge speed factor and glowing colors
+            const speedFactor = doublePinch ? 3.5 : 1.0;
+            
+            if (doublePinch) {
+                centralCore.material.color.setHex(0xff2a00); // Red hot core
+                outerRing.material.color.setHex(0xffa500); // Orange rings
+                midRing.material.color.setHex(0xffa500);
+                innerRing.material.color.setHex(0xffa500);
+                hudRing.material.color.setHex(0xff4500);
+                coilsGroup.children.forEach(c => c.material.color.setHex(0xff2a00));
+                particleSystem.material.color.setHex(0xff2a00);
+                particleSystem.material.size = 0.22;
+            } else {
+                centralCore.material.color.setHex(0xffffff); // White core
+                outerRing.material.color.setHex(0x00d2ff); // Neon blue rings
+                midRing.material.color.setHex(0x00d2ff);
+                innerRing.material.color.setHex(0x00d2ff);
+                hudRing.material.color.setHex(0x00d2ff);
+                coilsGroup.children.forEach(c => c.material.color.setHex(0xffa500)); // Copper orange coils
+                particleSystem.material.color.setHex(0x00d2ff);
+                particleSystem.material.size = 0.12;
+            }
+
+            // Spin rings continuously (background autonomous movement)
+            outerRing.rotation.z += 0.005 * speedFactor;
+            midRing.rotation.z -= 0.008 * speedFactor;
+            coilsGroup.rotation.z -= 0.008 * speedFactor;
+            innerRing.rotation.z += 0.012 * speedFactor;
+            hudRing.rotation.z += 0.003 * speedFactor;
+            centralCore.rotation.y += 0.015 * speedFactor;
+            particleSystem.rotation.z += 0.002 * speedFactor;
+
+            // 2. Smoothly LERP gesture tracking inputs for fluid Stark HUD feel
+            currentRotationX += (targetRotationX - currentRotationX) / 6.0;
+            currentRotationY += (targetRotationY - currentRotationY) / 6.0;
+            currentScale += (targetScale - currentScale) / 6.0;
+            currentExplode += (targetExplode - currentExplode) / 6.0;
+
+            // Apply rotation and scale to the entire reactor assembly
+            reactorGroup.rotation.x = currentRotationX;
+            reactorGroup.rotation.y = currentRotationY;
+            reactorGroup.scale.set(currentScale, currentScale, currentScale);
+
+            // 3. Apply the Explode Assembly gap (splits components along Z-axis)
+            outerRing.position.z = currentExplode * 0.8;
+            midRing.position.z = currentExplode * 0.2;
+            coilsGroup.position.z = currentExplode * 0.2; // Move coils with middle ring
+            innerRing.position.z = -currentExplode * 0.4;
+            hudRing.position.z = -currentExplode * 0.1;
+            centralCore.position.z = -currentExplode * 0.9;
+
+            // 4. Render Scene
+            if (!hologramMode) {
+                // Normal Mode: render full-screen WebGL directly
+                renderer.render(scene, camera);
+                
+                // Clear 2D overlay and draw glowing hand outlines
+                ctx2D.clearRect(0, 0, canvas2D.width, canvas2D.height);
+                if (latestHands && latestHands.length > 0) {
+                    latestHands.forEach(hand => drawHandOutline(hand));
+                }
+            } else {
+                // Hologram Projector Mode: render square and copy rotated onto 2D Canvas
+                render4WayHologram();
+            }
+        }
+
+        // Helper to draw the WebGL canvas 4 times (rotated) on the 2D projector canvas
+        function render4WayHologram() {
+            // Clear 2D Canvas with pure black
+            ctx2D.fillStyle = '#000000';
+            ctx2D.fillRect(0, 0, canvas2D.width, canvas2D.height);
+
+            const w = webglCanvas.width;
+            const h = webglCanvas.height;
+            const cx = canvas2D.width / 2;
+            const cy = canvas2D.height / 2;
+
+            // Distance offset of projections from center (adjusts to match CD pyramid width)
+            const offset = w / 2 - 15;
+
+            // Render 3D Scene onto WebGL Canvas
+            renderer.render(scene, camera);
+
+            // Draw 4 views around center, rotated facing inwards
+            // 1. Bottom View (0 degrees)
+            drawRotated(webglCanvas, cx, cy + offset, 0);
+            
+            // 2. Top View (180 degrees)
+            drawRotated(webglCanvas, cx, cy - offset, Math.PI);
+            
+            // 3. Left View (-90 degrees)
+            drawRotated(webglCanvas, cx - offset, cy, -Math.PI / 2);
+            
+            // 4. Right View (90 degrees)
+            drawRotated(webglCanvas, cx + offset, cy, Math.PI / 2);
+        }
+
+        function drawRotated(img, x, y, angle) {
+            ctx2D.save();
+            ctx2D.translate(x, y);
+            ctx2D.rotate(angle);
+            ctx2D.drawImage(img, -img.width / 2, -img.height / 2);
+            ctx2D.restore();
+        }
+
+        // =====================================================================
+        // WINDOW RESIZING & EVENTS
+        // =====================================================================
+        function resizeLayout() {
+            const width = window.innerWidth;
+            const height = window.innerHeight;
+
+            if (!hologramMode) {
+                // WebGL covers full screen
+                renderer.setSize(width, height);
+                camera.aspect = width / height;
+                camera.updateProjectionMatrix();
+            } else {
+                // In Hologram mode, WebGL is rendered to a fixed square buffer
+                const size = Math.min(width, height) * 0.35;
+                renderer.setSize(size, size);
+                camera.aspect = 1;
+                camera.updateProjectionMatrix();
+                
+                // Set 2D Projection canvas to full screen
+                canvas2D.width = width;
+                canvas2D.height = height;
+            }
+        }
+
+        window.addEventListener('resize', resizeLayout);
+
+        // Toggle Hologram mode
+        function toggleHologramMode() {
+            hologramMode = !hologramMode;
+            
+            if (hologramMode) {
+                btnMode.textContent = "PROJECTOR MODE: ON (4-WAY)";
+                btnMode.classList.add('active');
+                canvas2D.style.display = 'block';
+                centerGuide.style.display = 'block';
+                document.getElementById('crosshair').style.display = 'none';
+            } else {
+                btnMode.textContent = "PROJECTOR MODE: OFF (3D HUD)";
+                btnMode.classList.remove('active');
+                canvas2D.style.display = 'none';
+                centerGuide.style.display = 'none';
+                document.getElementById('crosshair').style.display = 'block';
+            }
+            
+            // Trigger layout recalculation
+            resizeLayout();
+        }
+
+        btnMode.addEventListener('click', () => {
+            toggleHologramMode();
+            // winsound trigger is played on the server
+        });
+
+        // Key trigger 'p' as shortcut to toggle projector mode
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'p' || e.key === 'P') {
+                toggleHologramMode();
+            }
+        });
+
+        // =====================================================================
+        // HOLOGRAPHIC HAND SKELETON DRAWER
+        // =====================================================================
+        function drawHandOutline(hand) {
+            const pts = hand.landmarks;
+            if (!pts) return;
+            
+            const w = canvas2D.width;
+            const h = canvas2D.height;
+            
+            // Map landmarks (normalized 0.0 - 1.0) to screen pixel coordinates
+            const pixelPts = pts.map(p => [p[0] * w, p[1] * h]);
+            
+            // Glowing neon blue aesthetics
+            ctx2D.fillStyle = 'rgba(0, 210, 255, 0.85)';
+            ctx2D.strokeStyle = 'rgba(0, 210, 255, 0.45)';
+            ctx2D.lineWidth = 3.5;
+            ctx2D.shadowBlur = 12;
+            ctx2D.shadowColor = 'rgba(0, 210, 255, 0.85)';
+            
+            // 1. Draw hand joints (glowing points)
+            pixelPts.forEach(pt => {
+                ctx2D.beginPath();
+                ctx2D.arc(pt[0], pt[1], 6, 0, Math.PI * 2);
+                ctx2D.fill();
+            });
+            
+            ctx2D.shadowBlur = 0; // Reset shadow blur to keep rendering speed at 60fps
+            
+            // 2. Draw skeletal bone connections
+            const connections = [
+                [0, 1], [1, 2], [2, 3], [3, 4],
+                [0, 5], [5, 6], [6, 7], [7, 8],
+                [0, 9], [9, 10], [10, 11], [11, 12],
+                [0, 13], [13, 14], [14, 15], [15, 16],
+                [0, 17], [17, 18], [18, 19], [19, 20],
+                [5, 9], [9, 13], [13, 17], [17, 0], [0, 5]
+            ];
+            
+            ctx2D.beginPath();
+            connections.forEach(conn => {
+                const p1 = pixelPts[conn[0]];
+                const p2 = pixelPts[conn[1]];
+                ctx2D.moveTo(p1[0], p1[1]);
+                ctx2D.lineTo(p2[0], p2[1]);
+            });
+            ctx2D.stroke();
+        }
+
+        // Initialize HUD
+        init3D();
+        connectWebSocket();
+        resizeLayout();
+        animate();
+
+    </script>
+</body>
+</html>

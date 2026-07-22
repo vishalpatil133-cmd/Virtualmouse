@@ -1,0 +1,724 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>AI Sensor Mouse Controller</title>
+    <style>
+        :root {
+            --bg-grad: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
+            --glass-bg: rgba(255, 255, 255, 0.05);
+            --glass-border: rgba(255, 255, 255, 0.1);
+            --neon-blue: #38bdf8;
+            --neon-green: #4ade80;
+            --neon-red: #f87171;
+            --neon-purple: #c084fc;
+        }
+
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        html, body {
+            background: var(--bg-grad);
+            color: #f1f5f9;
+            width: 100%;
+            height: 100dvh;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            overflow: hidden;
+            position: fixed; /* Prevents iOS Safari scroll-bounce */
+            touch-action: none; /* Prevents pull-to-refresh */
+        }
+
+        header {
+            width: 100%;
+            padding: 10px;
+            text-align: center;
+            background: rgba(15, 23, 42, 0.5);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid var(--glass-border);
+        }
+
+        header h1 {
+            font-size: 1.1rem;
+            font-weight: 600;
+            letter-spacing: 1px;
+            color: var(--neon-blue);
+            text-shadow: 0 0 10px rgba(56, 189, 248, 0.4);
+        }
+
+        #subtitle {
+            font-size: 0.7rem;
+            color: #94a3b8;
+            margin-top: 2px;
+        }
+
+        #status-bar {
+            margin: 6px 0;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 500;
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: #94a3b8;
+        }
+
+        .connected .dot { background: var(--neon-green); box-shadow: 0 0 8px var(--neon-green); }
+        .disconnected .dot { background: var(--neon-red); box-shadow: 0 0 8px var(--neon-red); }
+        .connecting .dot { background: var(--neon-purple); box-shadow: 0 0 8px var(--neon-purple); }
+
+        main {
+            flex: 1;
+            width: 100%;
+            max-width: 450px;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            justify-content: space-between;
+        }
+
+        /* Permission Overlay */
+        #permission-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(15, 23, 42, 0.95);
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 30px;
+            text-align: center;
+        }
+
+        #permission-overlay h2 {
+            font-size: 1.4rem;
+            color: var(--neon-blue);
+            margin-bottom: 15px;
+        }
+
+        #permission-overlay p {
+            color: #94a3b8;
+            font-size: 0.9rem;
+            margin-bottom: 30px;
+            line-height: 1.5;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
+            border: none;
+            color: white;
+            padding: 12px 25px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            border-radius: 12px;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(2, 132, 199, 0.4);
+            transition: transform 0.1s;
+        }
+
+        .btn:active {
+            transform: scale(0.96);
+        }
+
+        /* Control Panels */
+        .pad-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        .panel {
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: 20px;
+            backdrop-filter: blur(10px);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            transition: all 0.2s;
+        }
+
+        /* Trackpad swipe area */
+        #trackpad-area {
+            height: 22vh;
+            min-height: 120px;
+            background: rgba(255, 255, 255, 0.02);
+            border-color: rgba(255, 255, 255, 0.1);
+            color: var(--neon-blue);
+            grid-column: span 2;
+            cursor: pointer;
+            box-shadow: inset 0 0 10px rgba(255, 255, 255, 0.02);
+        }
+
+        #trackpad-area:active {
+            background: rgba(56, 189, 248, 0.04);
+            border-color: rgba(56, 189, 248, 0.25);
+            box-shadow: inset 0 0 15px rgba(56, 189, 248, 0.05);
+        }
+
+        /* Right Click Pad */
+        #right-click-pad {
+            height: 11vh;
+            min-height: 65px;
+            font-weight: 600;
+            color: var(--neon-purple);
+        }
+
+        #right-click-pad:active {
+            background: rgba(192, 132, 252, 0.15);
+        }
+
+        /* Double Click Pad */
+        #double-click-pad {
+            height: 11vh;
+            min-height: 65px;
+            font-weight: 600;
+            color: var(--neon-green);
+        }
+
+        #double-click-pad:active {
+            background: rgba(74, 222, 128, 0.15);
+        }
+
+        /* Drag Toggle */
+        #drag-toggle {
+            height: 9vh;
+            min-height: 55px;
+            grid-column: span 2;
+            font-weight: 600;
+            color: #e2e8f0;
+            position: relative;
+        }
+
+        #drag-toggle.active {
+            background: rgba(248, 113, 113, 0.15);
+            border-color: rgba(248, 113, 113, 0.4);
+            color: var(--neon-red);
+            text-shadow: 0 0 8px rgba(248, 113, 113, 0.4);
+        }
+
+        /* Scroll Roller Area */
+        #scroll-roller {
+            height: 11vh;
+            min-height: 65px;
+            grid-column: span 2;
+            position: relative;
+            color: #94a3b8;
+            font-size: 0.9rem;
+            font-weight: 500;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #scroll-roller-track {
+            position: absolute;
+            width: 100%;
+            height: 2px;
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        #scroll-roller-knob {
+            width: 70px;
+            height: 40px;
+            background: rgba(255, 255, 255, 0.15);
+            border: 1px solid rgba(255, 255, 255, 0.25);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            color: white;
+            z-index: 2;
+            touch-action: pan-y;
+        }
+
+        /* Calibration and Info Buttons */
+        .settings-row {
+            display: flex;
+            gap: 15px;
+            width: 100%;
+        }
+
+        .settings-row button {
+            flex: 1;
+            padding: 12px;
+            border-radius: 12px;
+            font-weight: 600;
+            font-size: 0.9rem;
+            border: 1px solid var(--glass-border);
+            cursor: pointer;
+            transition: all 0.1s;
+        }
+
+        #btn-calibrate {
+            background: rgba(56, 189, 248, 0.1);
+            color: var(--neon-blue);
+            border-color: rgba(56, 189, 248, 0.2);
+        }
+
+        #btn-calibrate:active {
+            background: rgba(56, 189, 248, 0.2);
+        }
+
+        #btn-vibe {
+            background: var(--glass-bg);
+            color: #e2e8f0;
+        }
+
+        #btn-vibe.off {
+            color: #64748b;
+            text-decoration: line-through;
+        }
+
+        #sensor-debug {
+            text-align: center;
+            font-size: 0.75rem;
+            color: #64748b;
+            font-family: monospace;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>AI SENSOR MOUSE</h1>
+        <div id="subtitle">Software Developed by Vishal P</div>
+    </header>
+
+    <div id="status-bar" class="disconnected">
+        <div class="dot"></div>
+        <span id="status-text">Disconnected</span>
+    </div>
+
+    <!-- Permission Request Overlay -->
+    <div id="permission-overlay">
+        <h2>Motion Sensors Needed</h2>
+        <p>This application uses your phone's built-in Gyroscope to control the computer cursor by tilting your phone.<br><br>Please grant permission when prompted.</p>
+        <button id="btn-request" class="btn">Start Sensor Mouse</button>
+    </div>
+
+    <main>
+        <div class="pad-row">
+            <!-- Trackpad Swipe Area -->
+            <div id="trackpad-area" class="panel" style="display: flex; flex-direction: column; gap: 8px;">
+                <span style="font-size: 1.25rem; font-weight: 700; color: var(--neon-blue); text-shadow: 0 0 10px rgba(56, 189, 248, 0.25);">TRACKPAD</span>
+                <span style="font-size: 0.75rem; color: #64748b; font-weight: 600; letter-spacing: 0.5px;">SWIPE TO MOVE | TAP TO CLICK</span>
+            </div>
+
+            <!-- Right Click -->
+            <div id="right-click-pad" class="panel">
+                <span>RIGHT CLICK</span>
+            </div>
+
+            <!-- Double Click -->
+            <div id="double-click-pad" class="panel">
+                <span>DOUBLE CLICK</span>
+            </div>
+
+            <!-- Drag Toggle -->
+            <div id="drag-toggle" class="panel">
+                <span>HOLD / DRAG TOGGLE</span>
+            </div>
+
+            <!-- Scroll Wheel Panel -->
+            <div id="scroll-roller" class="panel">
+                <div id="scroll-roller-track"></div>
+                <div id="scroll-roller-knob">⇅</div>
+            </div>
+        </div>
+
+        <!-- Keyboard Input Panel -->
+        <div class="settings-row">
+            <input type="text" id="keyboard-input" placeholder="Tap here to type on PC..." style="width: 100%; padding: 14px; border-radius: 12px; border: 1px solid var(--glass-border); background: var(--glass-bg); color: white; font-weight: 500; font-size: 0.95rem; text-align: center; outline: none; transition: border-color 0.25s; user-select: text !important; -webkit-user-select: text !important; touch-action: auto !important;" onfocus="this.style.borderColor='var(--neon-blue)';" onblur="this.style.borderColor='var(--glass-border)';">
+        </div>
+
+        <div class="settings-row">
+            <button id="btn-calibrate">CALIBRATE CENTER</button>
+            <button id="btn-vibe">HAPTIC: ON</button>
+        </div>
+
+        <div id="sensor-debug">
+            Roll: 0.0 | Pitch: 0.0
+        </div>
+    </main>
+
+    <script>
+        // State variables
+        let socket = null;
+        let sensorPermissionGranted = false;
+        let isHapticEnabled = true;
+        let isDragging = false;
+        let isTouchingTrackpad = false;
+
+        // Calibration offsets
+        let offsetRoll = 0.0;
+        let offsetPitch = 0.0;
+
+        // Rate limiting sensor updates (send every 25ms)
+        let lastSendTime = 0;
+        const SEND_INTERVAL_MS = 25;
+
+        // DOM elements
+        const statusOverlay = document.getElementById('permission-overlay');
+        const btnRequest = document.getElementById('btn-request');
+        const statusBar = document.getElementById('status-bar');
+        const statusText = document.getElementById('status-text');
+        const debugText = document.getElementById('sensor-debug');
+        const btnCalibrate = document.getElementById('btn-calibrate');
+        const btnVibe = document.getElementById('btn-vibe');
+        
+        // Touch pads
+        const padTrackpad = document.getElementById('trackpad-area');
+        const padRight = document.getElementById('right-click-pad');
+        const padDouble = document.getElementById('double-click-pad');
+        const padDrag = document.getElementById('drag-toggle');
+        const scrollRoller = document.getElementById('scroll-roller');
+        const scrollKnob = document.getElementById('scroll-roller-knob');
+
+        // Check if device orientation API is available
+        const hasOrientationAPI = (typeof DeviceOrientationEvent !== 'undefined');
+
+        // Vibrator helper
+        function vibrate(duration) {
+            if (isHapticEnabled && window.navigator && window.navigator.vibrate) {
+                window.navigator.vibrate(duration);
+            }
+        }
+
+        // Initialize Web Socket Connection
+        function initWebSocket() {
+            statusBar.className = 'connecting';
+            statusText.textContent = 'Connecting...';
+
+            const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsPort = 8765; // Python WebSocket Server Port
+            const wsHost = window.location.hostname;
+            const wsUrl = `${wsProtocol}//${wsHost}:${wsPort}`;
+
+            socket = new WebSocket(wsUrl);
+
+            socket.onopen = () => {
+                statusBar.className = 'connected';
+                statusText.textContent = 'Connected & Active';
+                vibrate([100, 50, 100]);
+            };
+
+            socket.onclose = () => {
+                statusBar.className = 'disconnected';
+                statusText.textContent = 'Disconnected';
+                // Try to reconnect in 3 seconds
+                setTimeout(initWebSocket, 3000);
+            };
+
+            socket.onerror = (err) => {
+                console.error("Socket error", err);
+            };
+        }
+
+        // Request Gyroscope permissions
+        btnRequest.addEventListener('click', async () => {
+            vibrate(50);
+            if (!hasOrientationAPI) {
+                alert("Your browser or device does not support motion sensors. Check if you are using HTTPS or Wi-Fi local connection.");
+                statusOverlay.style.display = 'none';
+                initWebSocket(); // Connect anyway (touch screen functions will work)
+                return;
+            }
+
+            // iOS requires explicit permission dialog
+            if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+                try {
+                    const permissionState = await DeviceOrientationEvent.requestPermission();
+                    if (permissionState === 'granted') {
+                        setupSensors();
+                    } else {
+                        alert("Sensor permission denied. You can only use on-screen buttons.");
+                        statusOverlay.style.display = 'none';
+                        initWebSocket();
+                    }
+                } catch (error) {
+                    console.error("Error asking for permission on iOS:", error);
+                    alert("Permission request failed. Check settings.");
+                }
+            } else {
+                // Android Chrome doesn't require requestPermission dialog
+                setupSensors();
+            }
+        });
+
+        function setupSensors() {
+            sensorPermissionGranted = true;
+            statusOverlay.style.display = 'none';
+            
+            // Listen for device orientation
+            window.addEventListener('deviceorientation', handleOrientation, true);
+            
+            // Connect to server
+            initWebSocket();
+        }
+
+        // Handle Orientation updates
+        function handleOrientation(event) {
+            if (!socket || socket.readyState !== WebSocket.OPEN) return;
+            if (isTouchingTrackpad) return;
+
+            // Roll (gamma: left/right tilt, -90 to 90)
+            // Pitch (beta: front/back tilt, -180 to 180)
+            let roll = event.gamma;
+            let pitch = event.beta;
+
+            if (roll === null || pitch === null) return;
+
+            // Apply offsets (calibration)
+            let calibratedRoll = roll - offsetRoll;
+            let calibratedPitch = pitch - offsetPitch;
+
+            // Limit angles between -45 and 45 for safety
+            calibratedRoll = Math.max(-45, Math.min(45, calibratedRoll));
+            calibratedPitch = Math.max(-45, Math.min(45, calibratedPitch));
+
+            // Display in debug HUD
+            debugText.textContent = `Roll: ${calibratedRoll.toFixed(1)}° | Pitch: ${calibratedPitch.toFixed(1)}°`;
+
+            // Rate-limit transmission to reduce network overhead
+            const now = Date.now();
+            if (now - lastSendTime > SEND_INTERVAL_MS) {
+                socket.send(JSON.stringify({
+                    type: 'motion',
+                    roll: calibratedRoll,
+                    pitch: calibratedPitch
+                }));
+                lastSendTime = now;
+            }
+        }
+
+        // Action send helper
+        function sendAction(actionName) {
+            if (!socket || socket.readyState !== WebSocket.OPEN) return;
+            socket.send(JSON.stringify({
+                type: 'action',
+                action: actionName
+            }));
+        }
+
+        // Calibration handler
+        btnCalibrate.addEventListener('click', () => {
+            vibrate(80);
+            // Listen to current orientation as neutral center point
+            const tempListener = (event) => {
+                if (event.gamma !== null && event.beta !== null) {
+                    offsetRoll = event.gamma;
+                    offsetPitch = event.beta;
+                    console.log(`Calibrated center: Roll Offset=${offsetRoll}, Pitch Offset=${offsetPitch}`);
+                    window.removeEventListener('deviceorientation', tempListener, true);
+                }
+            };
+            window.addEventListener('deviceorientation', tempListener, true);
+        });
+
+        // Toggle vibration
+        btnVibe.addEventListener('click', () => {
+            isHapticEnabled = !isHapticEnabled;
+            if (isHapticEnabled) {
+                btnVibe.textContent = "HAPTIC: ON";
+                btnVibe.classList.remove('off');
+                vibrate(50);
+            } else {
+                btnVibe.textContent = "HAPTIC: OFF";
+                btnVibe.classList.add('off');
+            }
+        });
+
+        // Trackpad swipe and tap gesture listeners
+        let lastTrackpadX = 0;
+        let lastTrackpadY = 0;
+        let trackpadTouchStartTime = 0;
+        let trackpadHasMoved = false;
+
+        padTrackpad.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            isTouchingTrackpad = true;
+            trackpadTouchStartTime = Date.now();
+            lastTrackpadX = e.touches[0].clientX;
+            lastTrackpadY = e.touches[0].clientY;
+            trackpadHasMoved = false;
+        });
+
+        padTrackpad.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            const currentX = e.touches[0].clientX;
+            const currentY = e.touches[0].clientY;
+            
+            const dx = currentX - lastTrackpadX;
+            const dy = currentY - lastTrackpadY;
+            
+            if (Math.hypot(dx, dy) > 0.5) {
+                trackpadHasMoved = true;
+                if (socket && socket.readyState === WebSocket.OPEN) {
+                    socket.send(JSON.stringify({
+                        type: 'trackpad_motion',
+                        dx: dx,
+                        dy: dy
+                    }));
+                }
+            }
+            
+            lastTrackpadX = currentX;
+            lastTrackpadY = currentY;
+        });
+
+        padTrackpad.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            // Brief delay to prevent gyroscope twitch on finger lift
+            setTimeout(() => {
+                isTouchingTrackpad = false;
+            }, 100);
+            
+            const touchDuration = Date.now() - trackpadTouchStartTime;
+            if (!trackpadHasMoved && touchDuration < 180) {
+                vibrate(30);
+                sendAction('left_click');
+            }
+        });
+
+        padRight.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            vibrate(30);
+            sendAction('right_click');
+        });
+
+        padDouble.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            vibrate([25, 20, 25]);
+            sendAction('double_click');
+        });
+
+        padDrag.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            isDragging = !isDragging;
+            if (isDragging) {
+                vibrate(60);
+                padDrag.classList.add('active');
+                sendAction('drag_down');
+            } else {
+                vibrate(30);
+                padDrag.classList.remove('active');
+                sendAction('drag_up');
+            }
+        });
+
+        // Scroll Knob gesture logic
+        let scrollTouchStartY = 0;
+        let lastScrollActionTime = 0;
+
+        scrollRoller.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            scrollTouchStartY = e.touches[0].clientY;
+            scrollKnob.style.background = 'rgba(255, 255, 255, 0.3)';
+        });
+
+        scrollRoller.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            const currentY = e.touches[0].clientY;
+            const diffY = currentY - scrollTouchStartY;
+
+            const now = Date.now();
+            if (now - lastScrollActionTime > 80) { // Throttle scroll command
+                if (diffY < -15) { // Dragged up -> Scroll Up
+                    sendAction('scroll_up');
+                    vibrate(10);
+                    scrollTouchStartY = currentY;
+                    lastScrollActionTime = now;
+                } else if (diffY > 15) { // Dragged down -> Scroll Down
+                    sendAction('scroll_down');
+                    vibrate(10);
+                    scrollTouchStartY = currentY;
+                    lastScrollActionTime = now;
+                }
+            }
+        });
+
+        scrollRoller.addEventListener('touchend', (e) => {
+            scrollKnob.style.background = 'rgba(255, 255, 255, 0.15)';
+        });
+
+        // Keyboard Input Handling
+        const keyboardInput = document.getElementById('keyboard-input');
+        let lastInputValue = "";
+
+        keyboardInput.addEventListener('input', (e) => {
+            const currentValue = keyboardInput.value;
+            
+            // Check if characters were added
+            if (currentValue.length > lastInputValue.length) {
+                const addedText = currentValue.substring(lastInputValue.length);
+                if (socket && socket.readyState === WebSocket.OPEN) {
+                    socket.send(JSON.stringify({
+                        type: 'keyboard',
+                        action: 'write',
+                        text: addedText
+                    }));
+                }
+            } 
+            // Check if characters were deleted (backspaces)
+            else if (currentValue.length < lastInputValue.length) {
+                const deleteCount = lastInputValue.length - currentValue.length;
+                if (socket && socket.readyState === WebSocket.OPEN) {
+                    socket.send(JSON.stringify({
+                        type: 'keyboard',
+                        action: 'backspace',
+                        count: deleteCount
+                    }));
+                }
+            }
+            
+            lastInputValue = currentValue;
+        });
+
+        // Handle Enter key on keyboard
+        keyboardInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                if (socket && socket.readyState === WebSocket.OPEN) {
+                    socket.send(JSON.stringify({
+                        type: 'keyboard',
+                        action: 'enter'
+                    }));
+                }
+                // Reset input box
+                keyboardInput.value = "";
+                lastInputValue = "";
+                keyboardInput.blur(); // Hide mobile keyboard
+            }
+        });
+
+    </script>
+</body>
+</html>
