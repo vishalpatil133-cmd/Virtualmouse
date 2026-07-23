@@ -54,10 +54,12 @@ Need your webcam preview window to stay visible while playing games or working i
 
 | Gesture | Action | Description |
 | :--- | :--- | :--- |
-| **Index + Thumb Pinch** | **Left Click** | Standard mouse click. Hold to click and drag. |
-| **Index + Middle + Thumb Pinch** | **Double Click** | Quick double-beep confirmation. Opens folders instantly. |
-| **Ring + Thumb Pinch** | **Right Click & Slide Controller** | Tap to right-click. Hold and slide left/right to change PowerPoint slides! |
-| **Pinky + Thumb Pinch** | **Vertical Scroll & Volume** | Move hand up/down to scroll. Move hand left/right to adjust system volume. |
+| **Move Pointer** | Index Knuckle Base (`Landmark 5`) | 100% Zero-Drift Smooth Pointer Motion |
+| **Left Click** | Index + Thumb Pinch OR Left Eye Wink | Immediate Left Click Trigger & Audio Chime |
+| **Right Click** | Ring + Thumb Pinch OR Right Eye Wink | Right Click Context Menu Trigger & Audio Chime |
+| **Drag & Drop** | Middle + Thumb Pinch | Hold Left Click & Move to Drag |
+| **Double Click** | Index + Middle + Thumb Pinch | Quick double-beep confirmation. Opens folders instantly. |
+| **Vertical Scroll & Volume** | Pinky + Thumb Pinch | Move hand up/down to scroll. Move hand left/right to adjust system volume. |
 | **Closed Fist** (Hold 1.5s) | **Voice Dictation** | Opens Windows Speech-to-Text (`Win + H`) so you can type using your voice. |
 | **Both Wrists Joined** | **Namaste (Show Desktop)** | Minimizes all active windows (`Win + D`). Perform again to restore. |
 | **Keyboard 'D' Key** | **Toggle Paint Mode** | Draw in neon green mid-air. Open palm for 1.5s to clear the canvas. |

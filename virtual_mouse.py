@@ -86,6 +86,22 @@ def play_sound_resume():
     winsound.Beep(800, 60)   # Ascending chime
 
 # =====================================================================
+# EYE BLINK EAR (Eye Aspect Ratio) HELPER
+# =====================================================================
+def calculate_ear(landmarks, eye_indices):
+    top = np.array([landmarks[eye_indices[0]].x, landmarks[eye_indices[0]].y])
+    bottom = np.array([landmarks[eye_indices[1]].x, landmarks[eye_indices[1]].y])
+    left = np.array([landmarks[eye_indices[2]].x, landmarks[eye_indices[2]].y])
+    right = np.array([landmarks[eye_indices[3]].x, landmarks[eye_indices[3]].y])
+    
+    vertical_dist = np.linalg.norm(top - bottom)
+    horizontal_dist = np.linalg.norm(left - right)
+    
+    if horizontal_dist == 0:
+        return 0.0
+    return vertical_dist / horizontal_dist
+
+# =====================================================================
 # MAIN IMPLEMENTATION
 # =====================================================================
 
@@ -100,6 +116,15 @@ def main():
         min_tracking_confidence=0.6
     )
     mp_draw = mp.solutions.drawing_utils
+
+    # Initialize MediaPipe Face Mesh for Eye Blink Tracking
+    mp_face_mesh = mp.solutions.face_mesh
+    face_mesh = mp_face_mesh.FaceMesh(
+        max_num_faces=1,
+        refine_landmarks=True,
+        min_detection_confidence=0.5,
+        min_tracking_confidence=0.5
+    )
 
     # Get screen resolution
     screen_w, screen_h = pyautogui.size()
@@ -146,6 +171,10 @@ def main():
     always_on_top = False     # Toggle with Ctrl+Alt+A / Ctrl+Alt+V
     frame_count = 0
 
+    # Eye Blink Tracking state variables
+    eye_blink_mode = True       # Toggle with 'e' key
+    last_eye_blink_time = 0.0
+
     # FPS Calculation
     prev_time = 0
 
@@ -158,20 +187,19 @@ def main():
     namaste_cooldown = 0.0
 
     print("\n" + "="*70)
-    print("MASTER AI VIRTUAL MOUSE RUNNING")
-    print("Software Developed by Vishal P")
+    print("      AI VIRTUAL MOUSE & EYE-BLINK TRACKER INITIALIZED")
     print("="*70)
-    print("Controls:")
-    print("1. Move Index Finger           -> Move mouse cursor smoothly")
-    print("2. Pinch Index & Thumb         -> Left Click (Audio: High click)")
-    print("3. Pinch Middle & Thumb        -> Drag & Drop / Hold left click")
-    print("4. Pinch Index, Mid & Thumb    -> Double Click (Audio: Double click)")
-    print("5. Pinch Ring & Thumb          -> Tap to Right Click | Swipe L/R for PPT Slides")
-    print("6. Pinch Pinky & Thumb + Move  -> Scroll Vertically | Move horizontally for Volume")
-    print("7. Show Peace Sign (Index+Mid) -> Pause / Resume tracking (hold 1.5s)")
-    print("8. Press 'h'                   -> Toggle Performance Mode (Saves CPU/GPU)")
-    print("9. Move mouse to screen corner -> Force exit (Fail-safe)")
-    print("10. Press 'q' or 'Esc'         -> Clean exit")
+    print("  • Index Knuckle (MCP 5)   -> 100% Stable Pointer Navigation")
+    print("  • Index + Thumb Pinch     -> Left Click (or Left Eye Wink)")
+    print("  • Middle + Thumb Pinch    -> Drag & Drop")
+    print("  • Ring + Thumb Pinch      -> Right Click (or Right Eye Wink)")
+    print("  • Pinky Up/Down           -> Smooth Scroll & System Volume")
+    print("  • Eye Blink Mode (ON)     -> Left Wink = Left Click | Right Wink = Right Click")
+    print("  • Press 'e'               -> Toggle Eye Blink Tracking")
+    print("  • Press 'd'               -> Toggle Air Draw Mode")
+    print("  • Press 'v'               -> Trigger Windows Voice Typing (Win+H)")
+    print("  • Press 'h'               -> Toggle Performance Mode")
+    print("  • Press 'q'               -> Quit Application")
     print("="*70 + "\n")
 
     try:
@@ -196,6 +224,38 @@ def main():
             # Process every frame for fluid 30 FPS cursor tracking smoothness
             rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             results = hands.process(rgb_frame)
+
+            # Process Eye Blink tracking if Eye Blink Mode is enabled
+            if eye_blink_mode and tracking_enabled:
+                face_results = face_mesh.process(rgb_frame)
+                if face_results.multi_face_landmarks:
+                    for face_landmarks in face_results.multi_face_landmarks:
+                        fl = face_landmarks.landmark
+                        # Left Eye: 159, 145, 33, 133
+                        # Right Eye: 386, 374, 362, 263
+                        left_ear = calculate_ear(fl, [159, 145, 33, 133])
+                        right_ear = calculate_ear(fl, [386, 374, 362, 263])
+
+                        curr_t = time.time()
+                        if curr_t - last_eye_blink_time > 0.45:
+                            # Left Eye Wink -> Left Click
+                            if left_ear < 0.16 and right_ear > 0.21:
+                                pyautogui.click(button='left')
+                                play_sound_left_click()
+                                left_clicked = True
+                                last_eye_blink_time = curr_t
+                                if not performance_mode:
+                                    cv2.putText(frame, "LEFT EYE WINK -> LEFT CLICK", (10, 90),
+                                                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+                            # Right Eye Wink -> Right Click
+                            elif right_ear < 0.16 and left_ear > 0.21:
+                                pyautogui.click(button='right')
+                                play_sound_right_click()
+                                ring_pinched = True
+                                last_eye_blink_time = curr_t
+                                if not performance_mode:
+                                    cv2.putText(frame, "RIGHT EYE WINK -> RIGHT CLICK", (10, 90),
+                                                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
 
             # Draw tracking boundary box on frame (active area)
             active_box_color = (255, 0, 255)
@@ -676,8 +736,14 @@ def main():
                     print("[STATUS] Always on Top: DISABLED")
                     winsound.Beep(1000, 100)
             
+            # Press 'e' key to toggle Eye Blink Mode
+            if key == ord('e'):
+                eye_blink_mode = not eye_blink_mode
+                print(f"[STATUS] Eye Blink Tracking Mode: {'ENABLED' if eye_blink_mode else 'DISABLED'}")
+                winsound.Beep(1600 if eye_blink_mode else 900, 100)
+                
             # Press 'h' key to toggle Performance Mode
-            if key == ord('h'):
+            elif key == ord('h'):
                 performance_mode = not performance_mode
                 print(f"[STATUS] Performance Mode {'Enabled (Graphics Hidden)' if performance_mode else 'Disabled'}")
                 winsound.Beep(1200, 80)
