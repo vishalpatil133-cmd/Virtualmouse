@@ -286,6 +286,7 @@ def main():
 
                         # Hands-Free Head / Nose Tracking when NO HAND is in front of camera
                         if tracking_enabled and (not results.multi_hand_landmarks):
+                            nose = fl[1]
                             raw_nx = nose.x * CAM_WIDTH
                             raw_ny = nose.y * CAM_HEIGHT
                             
