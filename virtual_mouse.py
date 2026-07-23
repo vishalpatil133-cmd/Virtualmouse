@@ -171,9 +171,11 @@ def main():
     always_on_top = False     # Toggle with Ctrl+Alt+A / Ctrl+Alt+V
     frame_count = 0
 
-    # Eye Blink Tracking state variables
-    eye_blink_mode = True       # Toggle with 'e' key
+    # Eye Blink Tracking state variables (OFF by default to prevent accidental clicks)
+    eye_blink_mode = False       # Toggle with 'e' key when explicitly needed
     last_eye_blink_time = 0.0
+    left_wink_frames = 0
+    right_wink_frames = 0
 
     # FPS Calculation
     prev_time = 0
@@ -187,15 +189,14 @@ def main():
     namaste_cooldown = 0.0
 
     print("\n" + "="*70)
-    print("      AI VIRTUAL MOUSE & EYE-BLINK TRACKER INITIALIZED")
+    print("      AI VIRTUAL MOUSE & GESTURE ECOSYSTEM INITIALIZED")
     print("="*70)
     print("  • Index Knuckle (MCP 5)   -> 100% Stable Pointer Navigation")
-    print("  • Index + Thumb Pinch     -> Left Click (or Left Eye Wink)")
+    print("  • Index + Thumb Pinch     -> Left Click")
     print("  • Middle + Thumb Pinch    -> Drag & Drop")
-    print("  • Ring + Thumb Pinch      -> Right Click (or Right Eye Wink)")
+    print("  • Ring + Thumb Pinch      -> Right Click / Slide Swap")
     print("  • Pinky Up/Down           -> Smooth Scroll & System Volume")
-    print("  • Eye Blink Mode (ON)     -> Left Wink = Left Click | Right Wink = Right Click")
-    print("  • Press 'e'               -> Toggle Eye Blink Tracking")
+    print("  • Press 'e'               -> Toggle Eye Blink Mode (OFF by default)")
     print("  • Press 'd'               -> Toggle Air Draw Mode")
     print("  • Press 'v'               -> Trigger Windows Voice Typing (Win+H)")
     print("  • Press 'h'               -> Toggle Performance Mode")
@@ -225,7 +226,7 @@ def main():
             rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             results = hands.process(rgb_frame)
 
-            # Process Eye Blink & Head tracking if Eye Blink Mode is enabled
+            # Process Eye Blink & Head tracking if Eye Blink Mode is explicitly enabled by user
             if eye_blink_mode and tracking_enabled:
                 face_results = face_mesh.process(rgb_frame)
                 if face_results.multi_face_landmarks:
@@ -236,25 +237,37 @@ def main():
                         left_ear = calculate_ear(fl, [159, 145, 33, 133])
                         right_ear = calculate_ear(fl, [386, 374, 362, 263])
 
+                        # Strict EAR Threshold & 3-Frame Dwell Time for intentional wink clicks
+                        if left_ear < 0.13 and right_ear > 0.23:
+                            left_wink_frames += 1
+                        else:
+                            left_wink_frames = 0
+
+                        if right_ear < 0.13 and left_ear > 0.23:
+                            right_wink_frames += 1
+                        else:
+                            right_wink_frames = 0
+
                         curr_t = time.time()
-                        if curr_t - last_eye_blink_time > 0.45:
-                            # Left Eye Wink -> Left Click
-                            if left_ear < 0.16 and right_ear > 0.21:
+                        if curr_t - last_eye_blink_time > 0.6:
+                            # Requires deliberate wink held for at least 3 consecutive frames
+                            if left_wink_frames >= 3:
                                 pyautogui.click(button='left')
                                 play_sound_left_click()
                                 left_clicked = True
                                 last_eye_blink_time = curr_t
+                                left_wink_frames = 0
                                 if not performance_mode:
-                                    cv2.putText(frame, "LEFT EYE WINK -> LEFT CLICK", (10, 90),
+                                    cv2.putText(frame, "INTENTIONAL LEFT WINK -> LEFT CLICK", (10, 90),
                                                 cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
-                            # Right Eye Wink -> Right Click
-                            elif right_ear < 0.16 and left_ear > 0.21:
+                            elif right_wink_frames >= 3:
                                 pyautogui.click(button='right')
                                 play_sound_right_click()
                                 ring_pinched = True
                                 last_eye_blink_time = curr_t
+                                right_wink_frames = 0
                                 if not performance_mode:
-                                    cv2.putText(frame, "RIGHT EYE WINK -> RIGHT CLICK", (10, 90),
+                                    cv2.putText(frame, "INTENTIONAL RIGHT WINK -> RIGHT CLICK", (10, 90),
                                                 cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
 
                         # Hands-Free Head / Nose Tracking when NO HAND is in front of camera
