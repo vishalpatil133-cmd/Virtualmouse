@@ -35,6 +35,7 @@ import time
 import math
 import winsound  # Built-in Windows module for zero-latency audio feedback
 import keyboard
+from collections import deque
 
 
 # =====================================================================
@@ -178,6 +179,10 @@ def main():
     closed_start_time = 0.0
     is_eye_closed = False
 
+    # Nose Head Tracking DSP Filtering states
+    nose_history = deque(maxlen=8)
+    prev_raw_x, prev_raw_y = 0.0, 0.0
+
     # FPS Calculation
     prev_time = 0
 
@@ -281,39 +286,49 @@ def main():
 
                         # Hands-Free Head / Nose Tracking when NO HAND is in front of camera
                         if tracking_enabled and (not results.multi_hand_landmarks):
-                            nose = fl[1]
-                            nose_x = int(nose.x * CAM_WIDTH)
-                            nose_y = int(nose.y * CAM_HEIGHT)
+                            raw_nx = nose.x * CAM_WIDTH
+                            raw_ny = nose.y * CAM_HEIGHT
                             
-                            # Optimized active tracking box for head movements
-                            head_min_x, head_max_x = 250, 390
-                            head_min_y, head_max_y = 170, 310
+                            # Camera-space dead-zone: ignore raw sensor noise under 1.2 pixels
+                            if abs(raw_nx - prev_raw_x) < 1.2 and abs(raw_ny - prev_raw_y) < 1.2:
+                                raw_nx, raw_ny = prev_raw_x, prev_raw_y
+                            else:
+                                prev_raw_x, prev_raw_y = raw_nx, raw_ny
+
+                            # 8-Frame Moving Average Queue to eliminate sensor jitter
+                            nose_history.append((raw_nx, raw_ny))
+                            avg_raw_x = sum(pt[0] for pt in nose_history) / len(nose_history)
+                            avg_raw_y = sum(pt[1] for pt in nose_history) / len(nose_history)
                             
-                            target_x = np.interp(nose_x, (head_min_x, head_max_x), (0, screen_w))
-                            target_y = np.interp(nose_y, (head_min_y, head_max_y), (0, screen_h))
+                            # Active head tracking box
+                            head_min_x, head_max_x = 230, 410
+                            head_min_y, head_max_y = 150, 330
+                            
+                            target_x = np.interp(avg_raw_x, (head_min_x, head_max_x), (0, screen_w))
+                            target_y = np.interp(avg_raw_y, (head_min_y, head_max_y), (0, screen_h))
                             
                             if first_detection:
                                 curr_x, curr_y = target_x, target_y
                                 first_detection = False
                             else:
-                                # Adaptive velocity-based EMA smoothing for rock-solid stability
+                                # Adaptive 2-stage EMA smoothing for rock-solid stability
                                 dist_to_target = math.hypot(target_x - prev_x, target_y - prev_y)
-                                # Slow head movement -> ultra smooth (0.18), Fast head turn -> responsive (0.45)
-                                head_smooth = 0.18 if dist_to_target < 40 else 0.45
+                                # Fine targeting (< 35px) -> heavy smoothing (0.12), Fast turn -> (0.40)
+                                head_smooth = 0.12 if dist_to_target < 35 else 0.40
                                 
                                 curr_x = prev_x + (target_x - prev_x) * head_smooth
                                 curr_y = prev_y + (target_y - prev_y) * head_smooth
                                 
-                            # Dead-zone threshold: ignore breathing / micro-jitter under 2.5 pixels
+                            # Screen dead-zone filter
                             dx = abs(curr_x - prev_x)
                             dy = abs(curr_y - prev_y)
-                            if dx > 2.5 or dy > 2.5:
+                            if dx > 2.0 or dy > 2.0:
                                 pyautogui.moveTo(curr_x, curr_y)
                                 prev_x, prev_y = curr_x, curr_y
                                 
                             if not performance_mode:
-                                cv2.circle(frame, (nose_x, nose_y), 5, (0, 255, 255), -1)
-                                cv2.putText(frame, "STABLE HEAD TRACKING ACTIVE (Zero-Drift)", (10, 115),
+                                cv2.circle(frame, (int(avg_raw_x), int(avg_raw_y)), 6, (0, 255, 255), -1)
+                                cv2.putText(frame, "ROCK-SOLID STABLE HEAD TRACKING (DSP Filtered)", (10, 115),
                                             cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 255, 255), 2)
 
             # Draw tracking boundary box on frame (active area)
