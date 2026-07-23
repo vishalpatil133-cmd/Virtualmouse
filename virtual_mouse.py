@@ -225,7 +225,7 @@ def main():
             rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             results = hands.process(rgb_frame)
 
-            # Process Eye Blink tracking if Eye Blink Mode is enabled
+            # Process Eye Blink & Head tracking if Eye Blink Mode is enabled
             if eye_blink_mode and tracking_enabled:
                 face_results = face_mesh.process(rgb_frame)
                 if face_results.multi_face_landmarks:
@@ -256,6 +256,39 @@ def main():
                                 if not performance_mode:
                                     cv2.putText(frame, "RIGHT EYE WINK -> RIGHT CLICK", (10, 90),
                                                 cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+
+                        # Hands-Free Head / Nose Tracking when NO HAND is in front of camera
+                        if tracking_enabled and (not results.multi_hand_landmarks):
+                            nose = fl[1]
+                            nose_x = int(nose.x * CAM_WIDTH)
+                            nose_y = int(nose.y * CAM_HEIGHT)
+                            
+                            # Sensitive head box bounds for responsive, smooth movement
+                            head_min_x, head_max_x = 240, 400
+                            head_min_y, head_max_y = 160, 320
+                            
+                            target_x = np.interp(nose_x, (head_min_x, head_max_x), (0, screen_w))
+                            target_y = np.interp(nose_y, (head_min_y, head_max_y), (0, screen_h))
+                            
+                            # Smooth motion with EMA (Exponential Moving Average)
+                            smooth_val = 0.35  # High sensitivity & butter smoothness
+                            if first_detection:
+                                curr_x, curr_y = target_x, target_y
+                                first_detection = False
+                            else:
+                                curr_x = prev_x + (target_x - prev_x) * smooth_val
+                                curr_y = prev_y + (target_y - prev_y) * smooth_val
+                                
+                            dx = abs(curr_x - prev_x)
+                            dy = abs(curr_y - prev_y)
+                            if dx > DEAD_ZONE_PX or dy > DEAD_ZONE_PX:
+                                pyautogui.moveTo(curr_x, curr_y)
+                                prev_x, prev_y = curr_x, curr_y
+                                
+                            if not performance_mode:
+                                cv2.circle(frame, (nose_x, nose_y), 6, (0, 255, 255), -1)
+                                cv2.putText(frame, "HANDS-FREE HEAD TRACKING ACTIVE", (10, 115),
+                                            cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 255, 255), 2)
 
             # Draw tracking boundary box on frame (active area)
             active_box_color = (255, 0, 255)
