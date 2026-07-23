@@ -11,6 +11,11 @@
 
 [English](README.md) · [简体中文](README.zh-CN.md) · [日本語](README.ja.md)
 
+[![Reddit Views](https://img.shields.io/badge/Reddit-9.2K%2B%20Views%20%F0%9F%94%A5-FF4500?style=for-the-badge&logo=reddit&logoColor=white)](https://reddit.com)
+[![GitHub Stars](https://img.shields.io/github/stars/vishalpatil133-cmd/Virtualmouse?style=for-the-badge&color=gold&logo=github)](https://github.com/vishalpatil133-cmd/Virtualmouse)
+[![Python Version](https://img.shields.io/badge/Python-3.8%2B-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
+[![Performance](https://img.shields.io/badge/Performance-30%20FPS%20Zero--Drift-brightgreen?style=for-the-badge)](https://github.com/vishalpatil133-cmd/Virtualmouse)
+
 An advanced, multi-modal human-computer interaction (HCI) suite that translates **Computer Vision hand tracking**, **smartphone motion sensors**, and **voice commands** into real-time operating system control, interactive 3D simulations, and gamified browser servers.
 
 Developed by **[Vishal P](https://github.com/vishalpatil133-cmd)** *(11th Grade Student Developer & ECE Enthusiast)*.
