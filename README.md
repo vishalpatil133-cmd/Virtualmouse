@@ -56,8 +56,8 @@ Need your webcam preview window to stay visible while playing games or working i
 | :--- | :--- | :--- |
 | **Move Pointer (Hands-Free)** | Head Motion / Nose Tip (No Hands visible) | Ultra-Smooth & Sensitive Hands-Free Cursor Tracking |
 | **Move Pointer (Hand)** | Index Knuckle Base (`Landmark 5`) | 100% Zero-Drift Smooth Pointer Motion |
-| **Left Click** | Index + Thumb Pinch OR Left Eye Wink | Immediate Left Click Trigger & Audio Chime |
-| **Right Click** | Ring + Thumb Pinch OR Right Eye Wink | Right Click Context Menu Trigger & Audio Chime |
+| **Left Click** | Index + Thumb Pinch OR Both Eyes 1-Blink | Immediate Left Click Trigger & Audio Chime |
+| **Right Click** | Ring + Thumb Pinch OR Both Eyes 2-Blinks | Right Click Context Menu Trigger & Audio Chime |
 | **Drag & Drop** | Middle + Thumb Pinch | Hold Left Click & Move to Drag |
 | **Double Click** | Index + Middle + Thumb Pinch | Quick double-beep confirmation. Opens folders instantly. |
 | **Vertical Scroll & Volume** | Pinky + Thumb Pinch | Move hand up/down to scroll. Move hand left/right to adjust system volume. |

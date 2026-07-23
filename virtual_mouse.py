@@ -59,8 +59,8 @@ DEAD_ZONE_PX = 2.0      # Ignore movements smaller than 2 screen pixels to elimi
 PINCH_THRESHOLD_PX = 30 
 
 # PyAutoGUI Setup
-# Fail-Safe: Moving the mouse to any corner of the screen aborts the script.
-pyautogui.FAILSAFE = True
+# Fail-Safe disabled per user configuration to allow full corner screen reaching
+pyautogui.FAILSAFE = False
 # Disable default delay to enable real-time responsive mouse control.
 pyautogui.PAUSE = 0
 
@@ -171,11 +171,11 @@ def main():
     always_on_top = False     # Toggle with Ctrl+Alt+A / Ctrl+Alt+V
     frame_count = 0
 
-    # Eye Blink Tracking state variables (OFF by default to prevent accidental clicks)
+    # Both-Eye Blink Tracking state variables (OFF by default to prevent accidental clicks)
     eye_blink_mode = False       # Toggle with 'e' key when explicitly needed
-    last_eye_blink_time = 0.0
-    left_wink_frames = 0
-    right_wink_frames = 0
+    both_eye_blink_count = 0
+    last_both_blink_time = 0.0
+    is_eye_closed = False
 
     # FPS Calculation
     prev_time = 0
@@ -196,6 +196,8 @@ def main():
     print("  • Middle + Thumb Pinch    -> Drag & Drop")
     print("  • Ring + Thumb Pinch      -> Right Click / Slide Swap")
     print("  • Pinky Up/Down           -> Smooth Scroll & System Volume")
+    print("  • Both Eyes 1-Blink       -> Left Click (When Eye Mode ON)")
+    print("  • Both Eyes 2-Blinks      -> Right Click (When Eye Mode ON)")
     print("  • Press 'e'               -> Toggle Eye Blink Mode (OFF by default)")
     print("  • Press 'd'               -> Toggle Air Draw Mode")
     print("  • Press 'v'               -> Trigger Windows Voice Typing (Win+H)")
@@ -226,7 +228,7 @@ def main():
             rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             results = hands.process(rgb_frame)
 
-            # Process Eye Blink & Head tracking if Eye Blink Mode is explicitly enabled by user
+            # Process Both-Eye Blink & Head tracking if Eye Blink Mode is explicitly enabled by user
             if eye_blink_mode and tracking_enabled:
                 face_results = face_mesh.process(rgb_frame)
                 if face_results.multi_face_landmarks:
@@ -237,38 +239,35 @@ def main():
                         left_ear = calculate_ear(fl, [159, 145, 33, 133])
                         right_ear = calculate_ear(fl, [386, 374, 362, 263])
 
-                        # Strict EAR Threshold & 3-Frame Dwell Time for intentional wink clicks
-                        if left_ear < 0.13 and right_ear > 0.23:
-                            left_wink_frames += 1
-                        else:
-                            left_wink_frames = 0
-
-                        if right_ear < 0.13 and left_ear > 0.23:
-                            right_wink_frames += 1
-                        else:
-                            right_wink_frames = 0
-
+                        # Both Eyes Closed Detection (1-Blink = Left Click, 2-Blinks = Right Click)
+                        both_closed = (left_ear < 0.17 and right_ear < 0.17)
                         curr_t = time.time()
-                        if curr_t - last_eye_blink_time > 0.6:
-                            # Requires deliberate wink held for at least 3 consecutive frames
-                            if left_wink_frames >= 3:
-                                pyautogui.click(button='left')
-                                play_sound_left_click()
-                                left_clicked = True
-                                last_eye_blink_time = curr_t
-                                left_wink_frames = 0
-                                if not performance_mode:
-                                    cv2.putText(frame, "INTENTIONAL LEFT WINK -> LEFT CLICK", (10, 90),
-                                                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
-                            elif right_wink_frames >= 3:
-                                pyautogui.click(button='right')
-                                play_sound_right_click()
-                                ring_pinched = True
-                                last_eye_blink_time = curr_t
-                                right_wink_frames = 0
-                                if not performance_mode:
-                                    cv2.putText(frame, "INTENTIONAL RIGHT WINK -> RIGHT CLICK", (10, 90),
-                                                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+
+                        if both_closed:
+                            if not is_eye_closed and (curr_t - last_both_blink_time > 0.15):
+                                both_eye_blink_count += 1
+                                is_eye_closed = True
+                                last_both_blink_time = curr_t
+                        else:
+                            is_eye_closed = False
+
+                        # Dispatch click based on blink count after short window (0.35s)
+                        if both_eye_blink_count == 1 and (curr_t - last_both_blink_time > 0.35):
+                            pyautogui.click(button='left')
+                            play_sound_left_click()
+                            left_clicked = True
+                            both_eye_blink_count = 0
+                            if not performance_mode:
+                                cv2.putText(frame, "BOTH EYES 1-BLINK -> LEFT CLICK", (10, 90),
+                                            cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 255, 0), 2)
+                        elif both_eye_blink_count >= 2:
+                            pyautogui.click(button='right')
+                            play_sound_right_click()
+                            ring_pinched = True
+                            both_eye_blink_count = 0
+                            if not performance_mode:
+                                cv2.putText(frame, "BOTH EYES DOUBLE-BLINK -> RIGHT CLICK", (10, 90),
+                                            cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 0, 255), 2)
 
                         # Hands-Free Head / Nose Tracking when NO HAND is in front of camera
                         if tracking_enabled and (not results.multi_hand_landmarks):
