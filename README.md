@@ -9,6 +9,8 @@
 
 # AI Virtual Mouse & Interactive Gesture Ecosystem 🚀
 
+[English](README.md) · [简体中文](README.zh-CN.md) · [日本語](README.ja.md)
+
 An advanced, multi-modal human-computer interaction (HCI) suite that translates **Computer Vision hand tracking**, **smartphone motion sensors**, and **voice commands** into real-time operating system control, interactive 3D simulations, and gamified browser servers.
 
 Developed by **[Vishal P](https://github.com/vishalpatil133-cmd)** *(11th Grade Student Developer & ECE Enthusiast)*.
