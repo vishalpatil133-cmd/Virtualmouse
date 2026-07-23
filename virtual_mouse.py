@@ -175,6 +175,7 @@ def main():
     eye_blink_mode = False       # Toggle with 'e' key when explicitly needed
     both_eye_blink_count = 0
     last_both_blink_time = 0.0
+    closed_start_time = 0.0
     is_eye_closed = False
 
     # FPS Calculation
@@ -239,26 +240,35 @@ def main():
                         left_ear = calculate_ear(fl, [159, 145, 33, 133])
                         right_ear = calculate_ear(fl, [386, 374, 362, 263])
 
-                        # Both Eyes Closed Detection (1-Blink = Left Click, 2-Blinks = Right Click)
+                        # Both Eyes Closed Detection
+                        # Natural human blinks (<0.3s) are IGNORED.
+                        # Intentional Long Blink (>=0.35s) -> LEFT CLICK
+                        # Fast Double Blink -> RIGHT CLICK
                         both_closed = (left_ear < 0.17 and right_ear < 0.17)
                         curr_t = time.time()
 
                         if both_closed:
-                            if not is_eye_closed and (curr_t - last_both_blink_time > 0.15):
-                                both_eye_blink_count += 1
+                            if not is_eye_closed:
+                                closed_start_time = curr_t
                                 is_eye_closed = True
-                                last_both_blink_time = curr_t
                         else:
-                            is_eye_closed = False
+                            if is_eye_closed:
+                                closed_duration = curr_t - closed_start_time
+                                is_eye_closed = False
+                                
+                                # Ignore natural quick blinks (< 0.28s)
+                                if closed_duration >= 0.32:
+                                    both_eye_blink_count += 1
+                                    last_both_blink_time = curr_t
 
-                        # Dispatch click based on blink count after short window (0.35s)
+                        # Dispatch click based on intentional blink duration / count
                         if both_eye_blink_count == 1 and (curr_t - last_both_blink_time > 0.35):
                             pyautogui.click(button='left')
                             play_sound_left_click()
                             left_clicked = True
                             both_eye_blink_count = 0
                             if not performance_mode:
-                                cv2.putText(frame, "BOTH EYES 1-BLINK -> LEFT CLICK", (10, 90),
+                                cv2.putText(frame, "INTENTIONAL LONG BLINK -> LEFT CLICK", (10, 90),
                                             cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 255, 0), 2)
                         elif both_eye_blink_count >= 2:
                             pyautogui.click(button='right')
@@ -266,7 +276,7 @@ def main():
                             ring_pinched = True
                             both_eye_blink_count = 0
                             if not performance_mode:
-                                cv2.putText(frame, "BOTH EYES DOUBLE-BLINK -> RIGHT CLICK", (10, 90),
+                                cv2.putText(frame, "FAST DOUBLE BLINK -> RIGHT CLICK", (10, 90),
                                             cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 0, 255), 2)
 
                         # Hands-Free Head / Nose Tracking when NO HAND is in front of camera
