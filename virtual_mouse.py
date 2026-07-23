@@ -177,6 +177,7 @@ def main():
     both_eye_blink_count = 0
     last_both_blink_time = 0.0
     closed_start_time = 0.0
+    eye_pause_cooldown = 0.0
     is_eye_closed = False
 
     # Nose Head Tracking DSP Filtering states
@@ -234,8 +235,8 @@ def main():
             rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             results = hands.process(rgb_frame)
 
-            # Process Both-Eye Blink & Head tracking if Eye Blink Mode is explicitly enabled by user
-            if eye_blink_mode and tracking_enabled:
+            # Process Both-Eye Blink & Head tracking if Eye Blink Mode is enabled
+            if eye_blink_mode:
                 face_results = face_mesh.process(rgb_frame)
                 if face_results.multi_face_landmarks:
                     for face_landmarks in face_results.multi_face_landmarks:
@@ -245,10 +246,6 @@ def main():
                         left_ear = calculate_ear(fl, [159, 145, 33, 133])
                         right_ear = calculate_ear(fl, [386, 374, 362, 263])
 
-                        # Both Eyes Closed Detection
-                        # Natural human blinks (<0.3s) are IGNORED.
-                        # Intentional Long Blink (>=0.35s) -> LEFT CLICK
-                        # Fast Double Blink -> RIGHT CLICK
                         both_closed = (left_ear < 0.17 and right_ear < 0.17)
                         curr_t = time.time()
 
@@ -256,33 +253,48 @@ def main():
                             if not is_eye_closed:
                                 closed_start_time = curr_t
                                 is_eye_closed = True
+                            
+                            # Check for 1.8 second long eye close to PAUSE or RESUME tracking!
+                            closed_duration = curr_t - closed_start_time
+                            if closed_duration >= 1.8 and (curr_t - eye_pause_cooldown > 2.0):
+                                tracking_enabled = not tracking_enabled
+                                eye_pause_cooldown = curr_t
+                                both_eye_blink_count = 0
+                                is_eye_closed = False
+                                if tracking_enabled:
+                                    play_sound_resume()
+                                    print("[STATUS] Mouse Tracking RESUMED via Eyes")
+                                else:
+                                    play_sound_pause()
+                                    print("[STATUS] Mouse Tracking PAUSED via Eyes")
                         else:
                             if is_eye_closed:
                                 closed_duration = curr_t - closed_start_time
                                 is_eye_closed = False
                                 
-                                # Ignore natural quick blinks (< 0.28s)
-                                if closed_duration >= 0.32:
+                                # Ignore natural quick blinks (< 0.28s) and long pause blinks (>= 1.5s)
+                                if 0.32 <= closed_duration < 1.5 and tracking_enabled:
                                     both_eye_blink_count += 1
                                     last_both_blink_time = curr_t
 
-                        # Dispatch click based on intentional blink duration / count
-                        if both_eye_blink_count == 1 and (curr_t - last_both_blink_time > 0.35):
-                            pyautogui.click(button='left')
-                            play_sound_left_click()
-                            left_clicked = True
-                            both_eye_blink_count = 0
-                            if not performance_mode:
-                                cv2.putText(frame, "INTENTIONAL LONG BLINK -> LEFT CLICK", (10, 90),
-                                            cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 255, 0), 2)
-                        elif both_eye_blink_count >= 2:
-                            pyautogui.click(button='right')
-                            play_sound_right_click()
-                            ring_pinched = True
-                            both_eye_blink_count = 0
-                            if not performance_mode:
-                                cv2.putText(frame, "FAST DOUBLE BLINK -> RIGHT CLICK", (10, 90),
-                                            cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 0, 255), 2)
+                        if tracking_enabled:
+                            # Dispatch click based on intentional blink duration / count
+                            if both_eye_blink_count == 1 and (curr_t - last_both_blink_time > 0.35):
+                                pyautogui.click(button='left')
+                                play_sound_left_click()
+                                left_clicked = True
+                                both_eye_blink_count = 0
+                                if not performance_mode:
+                                    cv2.putText(frame, "INTENTIONAL LONG BLINK -> LEFT CLICK", (10, 90),
+                                                cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 255, 0), 2)
+                            elif both_eye_blink_count >= 2:
+                                pyautogui.click(button='right')
+                                play_sound_right_click()
+                                ring_pinched = True
+                                both_eye_blink_count = 0
+                                if not performance_mode:
+                                    cv2.putText(frame, "FAST DOUBLE BLINK -> RIGHT CLICK", (10, 90),
+                                                cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 0, 255), 2)
 
                         # Hands-Free Head / Nose Tracking when NO HAND is in front of camera
                         if tracking_enabled and (not results.multi_hand_landmarks):
